@@ -5,10 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EBO's Magical Forest - AR Experience</title>
     
-    <!-- A-Frame for WebXR -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js"></script>
-    <!-- AR.js for marker-based AR -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <!-- A-Frame MUST load first -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    
+    <!-- Wait for A-Frame to fully load before loading Mind AR -->
+    <script>
+        // Ensure A-Frame is loaded before continuing
+        if (typeof AFRAME === 'undefined') {
+            document.addEventListener('DOMContentLoaded', function() {
+                // Fallback: reload if AFRAME still not defined
+                if (typeof AFRAME === 'undefined') {
+                    console.log('Waiting for A-Frame to load...');
+                    setTimeout(() => location.reload(), 1000);
+                }
+            });
+        }
+    </script>
+    
+    <!-- Mind AR - loads after A-Frame -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
     
     <style>
         * {
@@ -265,11 +280,13 @@
     <!-- AR Scene -->
     <a-scene
         id="arScene"
-        mindar-image="imageTargetSrc: targets.mind; filterMinCF:0.0001; filterBeta: 0.001"
+        mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; autoStart: true"
         color-space="sRGB"
         renderer="colorManagement: true, physicallyCorrectLights"
         vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: false">
+        device-orientation-permission-ui="enabled: false"
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false;">
         
         <a-assets>
             <!-- We'll use primitives to create EBO -->
@@ -445,18 +462,65 @@
         let canFall = true;
         let fallCount = 0;
 
-        // Custom component for handling taps
-        AFRAME.registerComponent('tap-to-fall', {
-            init: function () {
-                this.el.addEventListener('click', function (evt) {
-                    triggerFall();
+        // Ensure AFRAME is loaded before registering component
+        window.addEventListener('load', function() {
+            if (typeof AFRAME !== 'undefined') {
+                // Custom component for handling taps
+                AFRAME.registerComponent('tap-to-fall', {
+                    init: function () {
+                        this.el.addEventListener('click', function (evt) {
+                            triggerFall();
+                        });
+                    }
                 });
             }
         });
 
         function startAR() {
+            // Wait for AFRAME to be available
+            if (typeof AFRAME === 'undefined') {
+                console.log('Waiting for A-Frame...');
+                setTimeout(startAR, 100);
+                return;
+            }
+            
             const startScreen = document.getElementById('startScreen');
             const arScene = document.getElementById('arScene');
+            const instructions = document.getElementById('instructions');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Hide start screen
+            startScreen.classList.add('hidden');
+            
+            // Show loading
+            loadingIndicator.classList.add('show');
+            
+            // Add longer delay to ensure everything is loaded
+            setTimeout(() => {
+                arScene.classList.add('active');
+                
+                // Get the scene element
+                const sceneEl = document.querySelector('a-scene');
+                
+                if (!sceneEl) {
+                    showError('AR Scene not found. Please refresh the page.');
+                    return;
+                }
+                
+                // Force scene to initialize if not already
+                if (!sceneEl.hasLoaded) {
+                    console.log('Waiting for scene to load...');
+                    sceneEl.addEventListener('loaded', () => {
+                        console.log('Scene loaded!');
+                        initializeAR(sceneEl);
+                    });
+                } else {
+                    initializeAR(sceneEl);
+                }
+            }, 1000);
+        }
+        
+        function initializeAR(sceneEl) {
             const instructions = document.getElementById('instructions');
             const loadingIndicator = document.getElementById('loadingIndicator');
             
