@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+    <h1>Camera Test</h1>
+    <button onclick="startCamera()">Start Camera</button>
+    <video id="video" width="300" height="300" autoplay></video>
+    
+    <script>
+        function startCamera() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    document.getElementById('video').srcObject = stream;
+                    alert('Camera works!');
+                })
+                .catch(err => {
+                    alert('Camera error: ' + err.message);
+                });
+        }
+    </script>
+</body>
+</html>
