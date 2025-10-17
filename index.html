@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EBO's Magical Forest - AR Experience</title>
+    
+    <!-- A-Frame for WebXR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js"></script>
+    <!-- AR.js for marker-based AR -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 50%, #10B981 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease-out;
+        }
+
+        #startScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .start-content {
+            text-align: center;
+            color: white;
+            padding: 2rem;
+            max-width: 400px;
+        }
+
+        .robot-icon {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            margin: 0 auto 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .robot-icon::before {
+            content: "👁️";
+            font-size: 60px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .start-button {
+            background: white;
+            color: #8B5CF6;
+            border: none;
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .start-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .instructions {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(139, 92, 246, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            z-index: 999;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            display: none;
+        }
+
+        .instructions.show {
+            display: block;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateX(-50%) translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        #arScene {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            display: none;
+        }
+
+        #arScene.active {
+            display: block;
+        }
+
+        .loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 998;
+            display: none;
+        }
+
+        .loading-indicator.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .tap-hint {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(139, 92, 246, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            display: none;
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        .tap-hint.show {
+            display: block;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-5px); }
+        }
+
+        .error-message {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(220, 38, 38, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            z-index: 1001;
+            display: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .error-message.show {
+            display: block;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Start Screen -->
+    <div id="startScreen">
+        <div class="start-content">
+            <div class="robot-icon"></div>
+            <h1>EBO's Adventure</h1>
+            <p class="subtitle">Watch EBO come to life! Point your camera at the poster to see the magic happen 🌟</p>
+            <button class="start-button" onclick="startAR()">Start Magic</button>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions" id="instructions">
+        📱 Find EBO on the poster!
+    </div>
+
+    <!-- Tap Hint -->
+    <div class="tap-hint" id="tapHint">
+        👆 Tap to make EBO fall again!
+    </div>
+
+    <!-- Loading Indicator -->
+    <div class="loading-indicator" id="loadingIndicator">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Error Message -->
+    <div class="error-message" id="errorMessage"></div>
+
+    <!-- AR Scene -->
+    <a-scene
+        id="arScene"
+        mindar-image="imageTargetSrc: targets.mind; filterMinCF:0.0001; filterBeta: 0.001"
+        color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights"
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
+        
+        <a-assets>
+            <!-- We'll use primitives to create EBO -->
+        </a-assets>
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- EBO Robot Container -->
+            <a-entity id="eboContainer" position="0 -0.1 0.1">
+                
+                <!-- EBO's Body (Spherical base) -->
+                <a-sphere 
+                    id="eboBody"
+                    radius="0.15" 
+                    color="#E0E7FF"
+                    position="0 0 0"
+                    animation__wobble="property: rotation; to: 0 0 10; dir: alternate; dur: 800; loop: true; easing: easeInOutSine; autoplay: false">
+                    
+                    <!-- EBO's Eye (Big black lens) -->
+                    <a-sphere 
+                        radius="0.08" 
+                        color="#1F2937"
+                        position="0 0.02 0.12">
+                        <!-- Eye shine -->
+                        <a-sphere 
+                            radius="0.02" 
+                            color="#FFFFFF"
+                            position="0.02 0.02 0.06">
+                        </a-sphere>
+                        <!-- Pupil -->
+                        <a-circle
+                            radius="0.06"
+                            color="#000000"
+                            position="0 0 0.01"
+                            animation__blink="property: scale; to: 1 0.1 1; dur: 150; startEvents: blink">
+                        </a-circle>
+                    </a-sphere>
+                    
+                    <!-- Little feet -->
+                    <a-cylinder 
+                        radius="0.02" 
+                        height="0.04"
+                        color="#9CA3AF"
+                        position="-0.06 -0.15 0"
+                        rotation="0 0 -10">
+                    </a-cylinder>
+                    <a-cylinder 
+                        radius="0.02" 
+                        height="0.04"
+                        color="#9CA3AF"
+                        position="0.06 -0.15 0"
+                        rotation="0 0 10">
+                    </a-cylinder>
+                </a-sphere>
+
+                <!-- Falling animation for the whole robot -->
+                <a-animation
+                    id="fallAnimation"
+                    attribute="position"
+                    from="0 -0.1 0.1"
+                    to="0.3 -0.5 0.2"
+                    dur="1500"
+                    easing="easeInQuad"
+                    begin="fall">
+                </a-animation>
+                
+                <a-animation
+                    id="tumbleAnimation"
+                    attribute="rotation"
+                    from="0 0 0"
+                    to="180 360 270"
+                    dur="1500"
+                    easing="easeOutBounce"
+                    begin="fall">
+                </a-animation>
+
+                <!-- Reset animation -->
+                <a-animation
+                    id="resetPosition"
+                    attribute="position"
+                    to="0 -0.1 0.1"
+                    dur="1000"
+                    easing="easeOutElastic"
+                    begin="reset">
+                </a-animation>
+                
+                <a-animation
+                    id="resetRotation"
+                    attribute="rotation"
+                    to="0 0 0"
+                    dur="1000"
+                    easing="easeOutElastic"
+                    begin="reset">
+                </a-animation>
+            </a-entity>
+
+            <!-- Floating particles around the scene -->
+            <a-entity id="particles">
+                <!-- Magical sparkles -->
+                <a-sphere
+                    radius="0.01"
+                    color="#FCD34D"
+                    position="0.3 0.2 0.1"
+                    animation="property: position; to: 0.3 0.4 0.1; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
+                    <a-animation
+                        attribute="opacity"
+                        from="0.3"
+                        to="1"
+                        dur="1000"
+                        direction="alternate"
+                        repeat="indefinite">
+                    </a-animation>
+                </a-sphere>
+                
+                <a-sphere
+                    radius="0.01"
+                    color="#A78BFA"
+                    position="-0.2 0.1 0.1"
+                    animation="property: position; to: -0.2 0.3 0.1; dir: alternate; dur: 2500; loop: true; easing: easeInOutSine">
+                </a-sphere>
+                
+                <a-sphere
+                    radius="0.01"
+                    color="#10B981"
+                    position="0.1 0.15 0.15"
+                    animation="property: position; to: 0.1 0.35 0.15; dir: alternate; dur: 3000; loop: true; easing: easeInOutSine">
+                </a-sphere>
+            </a-entity>
+
+            <!-- Decorative elements matching the poster style -->
+            <a-torus
+                radius="0.25"
+                radius-tubular="0.002"
+                color="#EC4899"
+                position="0 0 0"
+                rotation="90 0 0"
+                opacity="0.3"
+                animation="property: rotation; to: 90 360 0; dur: 20000; loop: true; easing: linear">
+            </a-torus>
+
+            <!-- Little fox friend (simplified) -->
+            <a-cone
+                id="fox"
+                radius-bottom="0.05"
+                height="0.1"
+                color="#FF6B35"
+                position="0.4 -0.2 0.05"
+                rotation="0 -45 0"
+                visible="false"
+                animation__appear="property: visible; to: true; dur: 10; startEvents: showFox; autoplay: false">
+                <!-- Fox ears -->
+                <a-cone
+                    radius-bottom="0.015"
+                    height="0.03"
+                    color="#FF6B35"
+                    position="-0.02 0.05 0">
+                </a-cone>
+                <a-cone
+                    radius-bottom="0.015"
+                    height="0.03"
+                    color="#FF6B35"
+                    position="0.02 0.05 0">
+                </a-cone>
+            </a-cone>
+
+        </a-entity>
+    </a-scene>
+
+    <script>
+        let arStarted = false;
+        let targetFound = false;
+        let canFall = true;
+        let fallCount = 0;
+
+        // Custom component for handling taps
+        AFRAME.registerComponent('tap-to-fall', {
+            init: function () {
+                this.el.addEventListener('click', function (evt) {
+                    triggerFall();
+                });
+            }
+        });
+
+        function startAR() {
+            const startScreen = document.getElementById('startScreen');
+            const arScene = document.getElementById('arScene');
+            const instructions = document.getElementById('instructions');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            // Hide start screen
+            startScreen.classList.add('hidden');
+            
+            // Show loading
+            loadingIndicator.classList.add('show');
+            
+            // Initialize AR scene
+            setTimeout(() => {
+                arScene.classList.add('active');
+                
+                // Start AR
+                const sceneEl = document.querySelector('a-scene');
+                
+                sceneEl.addEventListener('arReady', () => {
+                    loadingIndicator.classList.remove('show');
+                    instructions.classList.add('show');
+                    arStarted = true;
+                    
+                    // Add tap handler to the scene
+                    sceneEl.addEventListener('click', handleTap);
+                });
+                
+                sceneEl.addEventListener('arError', (event) => {
+                    loadingIndicator.classList.remove('show');
+                    showError('Camera permission denied or not supported. Please allow camera access and refresh.');
+                });
+                
+                // Target detection events
+                sceneEl.addEventListener('targetFound', () => {
+                    targetFound = true;
+                    instructions.textContent = '✨ EBO found! Watch the magic!';
+                    
+                    // Trigger the fall animation after a short delay
+                    setTimeout(() => {
+                        triggerFall();
+                        
+                        // Show tap hint after first animation
+                        setTimeout(() => {
+                            document.getElementById('tapHint').classList.add('show');
+                        }, 2000);
+                    }, 1000);
+                    
+                    // Start wobble animation
+                    const eboBody = document.getElementById('eboBody');
+                    eboBody.components.animation__wobble.play();
+                    
+                    // Add haptic feedback if available
+                    if ('vibrate' in navigator) {
+                        navigator.vibrate([100, 50, 100]);
+                    }
+                });
+                
+                sceneEl.addEventListener('targetLost', () => {
+                    targetFound = false;
+                    instructions.textContent = '📱 Find EBO on the poster!';
+                    document.getElementById('tapHint').classList.remove('show');
+                    
+                    // Reset EBO position
+                    resetEbo();
+                });
+            }, 500);
+        }
+
+        function triggerFall() {
+            if (!canFall || !targetFound) return;
+            
+            canFall = false;
+            fallCount++;
+            
+            const eboContainer = document.getElementById('eboContainer');
+            
+            // Emit fall event
+            eboContainer.emit('fall');
+            
+            // Blink animation
+            document.querySelector('#eboBody a-circle').emit('blink');
+            
+            // Haptic feedback
+            if ('vibrate' in navigator) {
+                navigator.vibrate(50);
+            }
+            
+            // Show fox after 3 falls
+            if (fallCount === 3) {
+                document.getElementById('fox').emit('showFox');
+                instructions.textContent = '🦊 Fox appeared to help!';
+            }
+            
+            // Reset after animation completes
+            setTimeout(() => {
+                resetEbo();
+            }, 2500);
+        }
+
+        function resetEbo() {
+            const eboContainer = document.getElementById('eboContainer');
+            eboContainer.emit('reset');
+            
+            setTimeout(() => {
+                canFall = true;
+            }, 1000);
+        }
+
+        function handleTap(event) {
+            if (targetFound) {
+                triggerFall();
+            }
+        }
+
+        function showError(message) {
+            const errorElement = document.getElementById('errorMessage');
+            errorElement.textContent = message;
+            errorElement.classList.add('show');
+            
+            setTimeout(() => {
+                errorElement.classList.remove('show');
+            }, 5000);
+        }
+
+        // Random blinks
+        setInterval(() => {
+            if (targetFound && Math.random() > 0.7) {
+                document.querySelector('#eboBody a-circle').emit('blink');
+            }
+        }, 3000);
+
+        // Handle orientation changes
+        window.addEventListener('resize', () => {
+            if (arStarted) {
+                location.reload();
+            }
+        });
+
+        // Prevent scroll on mobile
+        document.addEventListener('touchmove', (e) => {
+            if (arStarted) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>
