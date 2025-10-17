@@ -296,7 +296,14 @@
 
         <a-entity mindar-image-target="targetIndex: 0">
             <!-- EBO Robot Container -->
-            <a-entity id="eboContainer" position="0 -0.1 0.1">
+            <!-- Replaced legacy <a-animation> elements with animation__ attributes that use startEvents -->
+            <a-entity
+                id="eboContainer"
+                position="0 -0.1 0.1"
+                animation__fall="property: position; from: 0 -0.1 0.1; to: 0.3 -0.5 0.2; dur: 1500; easing: easeInQuad; startEvents: fall; autoplay: false"
+                animation__tumble="property: rotation; from: 0 0 0; to: 180 360 270; dur: 1500; easing: easeOutBounce; startEvents: fall; autoplay: false"
+                animation__resetPos="property: position; to: 0 -0.1 0.1; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false"
+                animation__resetRot="property: rotation; to: 0 0 0; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false">
                 
                 <!-- EBO's Body (Spherical base) -->
                 <a-sphere 
@@ -343,45 +350,7 @@
                     </a-cylinder>
                 </a-sphere>
 
-                <!-- Falling animation for the whole robot -->
-                <a-animation
-                    id="fallAnimation"
-                    attribute="position"
-                    from="0 -0.1 0.1"
-                    to="0.3 -0.5 0.2"
-                    dur="1500"
-                    easing="easeInQuad"
-                    begin="fall">
-                </a-animation>
-                
-                <a-animation
-                    id="tumbleAnimation"
-                    attribute="rotation"
-                    from="0 0 0"
-                    to="180 360 270"
-                    dur="1500"
-                    easing="easeOutBounce"
-                    begin="fall">
-                </a-animation>
-
-                <!-- Reset animation -->
-                <a-animation
-                    id="resetPosition"
-                    attribute="position"
-                    to="0 -0.1 0.1"
-                    dur="1000"
-                    easing="easeOutElastic"
-                    begin="reset">
-                </a-animation>
-                
-                <a-animation
-                    id="resetRotation"
-                    attribute="rotation"
-                    to="0 0 0"
-                    dur="1000"
-                    easing="easeOutElastic"
-                    begin="reset">
-                </a-animation>
+                <!-- (Removed legacy <a-animation> tags and rely on startEvents on the container) -->
             </a-entity>
 
             <!-- Floating particles around the scene -->
@@ -553,6 +522,7 @@
                 
                 // Target detection events
                 sceneEl.addEventListener('targetFound', () => {
+                    console.log('targetFound fired');
                     targetFound = true;
                     instructions.textContent = '✨ EBO found! Watch the magic!';
                     
@@ -566,9 +536,13 @@
                         }, 2000);
                     }, 1000);
                     
-                    // Start wobble animation
+                    // Start wobble animation (safely)
                     const eboBody = document.getElementById('eboBody');
-                    eboBody.components.animation__wobble.play();
+                    if (eboBody && eboBody.components && eboBody.components.animation__wobble && typeof eboBody.components.animation__wobble.play === 'function') {
+                        eboBody.components.animation__wobble.play();
+                    } else {
+                        console.warn('wobble component not ready yet');
+                    }
                     
                     // Add haptic feedback if available
                     if ('vibrate' in navigator) {
@@ -594,12 +568,36 @@
             fallCount++;
             
             const eboContainer = document.getElementById('eboContainer');
+            if (!eboContainer) {
+                console.error('eboContainer not found');
+                return;
+            }
             
-            // Emit fall event
+            console.log('triggerFall called, emitting fall');
+            // Emit fall event (preferred)
             eboContainer.emit('fall');
+
+            // Fallback: if animation components exist, try to play them directly (some browsers / webviews ignore begin/startEvents)
+            try {
+                const fallComp = eboContainer.components && eboContainer.components['animation__fall'];
+                const tumbleComp = eboContainer.components && eboContainer.components['animation__tumble'];
+                if (fallComp && typeof fallComp.play === 'function') {
+                    fallComp.play();
+                }
+                if (tumbleComp && typeof tumbleComp.play === 'function') {
+                    tumbleComp.play();
+                }
+            } catch (err) {
+                console.warn('fallback play for fall/tumble failed', err);
+            }
             
-            // Blink animation
-            document.querySelector('#eboBody a-circle').emit('blink');
+            // Blink animation (safely)
+            const eyeCircle = document.querySelector('#eboBody a-circle');
+            if (eyeCircle) {
+                eyeCircle.emit('blink');
+            } else {
+                console.warn('eye circle not found for blink');
+            }
             
             // Haptic feedback
             if ('vibrate' in navigator) {
@@ -608,7 +606,8 @@
             
             // Show fox after 3 falls
             if (fallCount === 3) {
-                document.getElementById('fox').emit('showFox');
+                const fox = document.getElementById('fox');
+                if (fox) fox.emit('showFox');
                 instructions.textContent = '🦊 Fox appeared to help!';
             }
             
@@ -620,7 +619,18 @@
 
         function resetEbo() {
             const eboContainer = document.getElementById('eboContainer');
+            if (!eboContainer) return;
             eboContainer.emit('reset');
+
+            // Fallback: directly play reset animations if needed
+            try {
+                const resetPos = eboContainer.components && eboContainer.components['animation__resetPos'];
+                const resetRot = eboContainer.components && eboContainer.components['animation__resetRot'];
+                if (resetPos && typeof resetPos.play === 'function') resetPos.play();
+                if (resetRot && typeof resetRot.play === 'function') resetRot.play();
+            } catch (err) {
+                console.warn('fallback reset play failed', err);
+            }
             
             setTimeout(() => {
                 canFall = true;
@@ -646,7 +656,8 @@
         // Random blinks
         setInterval(() => {
             if (targetFound && Math.random() > 0.7) {
-                document.querySelector('#eboBody a-circle').emit('blink');
+                const eyeCircle = document.querySelector('#eboBody a-circle');
+                if (eyeCircle) eyeCircle.emit('blink');
             }
         }, 3000);
 
