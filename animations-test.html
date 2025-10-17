@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EBO Animations Test</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    #ui { position: fixed; top: 12px; left: 12px; z-index: 999; background: rgba(255,255,255,0.9); padding: 8px 12px; border-radius: 8px; }
+    button { margin-right: 8px; }
+    #log { position: fixed; bottom: 12px; left: 12px; right: 12px; max-height: 120px; overflow:auto; background: rgba(0,0,0,0.6); color: #fff; padding: 8px; border-radius: 6px; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <button id="playBtn">Play Fall</button>
+    <button id="resetBtn">Reset</button>
+    <button id="wobbleBtn">Toggle Wobble</button>
+    <span id="status">Ready</span>
+  </div>
+
+  <div id="log"></div>
+
+  <a-scene embedded background="color: #222">
+    <a-assets></a-assets>
+
+    <a-entity position="0 0 0">
+      <a-camera position="0 1.6 0"></a-camera>
+    </a-entity>
+
+    <a-entity id="eboContainer" position="0 0 -1"
+      animation__fall="property: position; from: 0 0 -1; to: 0 -0.6 -0.8; dur: 1500; easing: easeInQuad; startEvents: fall; autoplay: false"
+      animation__tumble="property: rotation; from: 0 0 0; to: 180 360 270; dur: 1500; easing: easeOutBounce; startEvents: fall; autoplay: false"
+      animation__resetPos="property: position; to: 0 0 -1; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false"
+      animation__resetRot="property: rotation; to: 0 0 0; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false">
+
+      <a-sphere id="eboBody" radius="0.3" color="#E0E7FF" position="0 0 0"
+        animation__wobble="property: rotation; to: 0 0 10; dir: alternate; dur: 800; loop: true; easing: easeInOutSine; autoplay: false">
+
+        <a-sphere radius="0.12" color="#1F2937" position="0 0.04 0.18">
+          <a-sphere radius="0.03" color="#fff" position="0.02 0.02 0.06"></a-sphere>
+          <a-circle radius="0.09" color="#000" position="0 0 0.02" animation__blink="property: scale; to: 1 0.1 1; dur: 150; startEvents: blink"></a-circle>
+        </a-sphere>
+
+        <a-cylinder radius="0.04" height="0.06" color="#9CA3AF" position="-0.16 -0.25 0" rotation="0 0 -10"></a-cylinder>
+        <a-cylinder radius="0.04" height="0.06" color="#9CA3AF" position="0.16 -0.25 0" rotation="0 0 10"></a-cylinder>
+      </a-sphere>
+    </a-entity>
+
+    <a-plane position="0 -0.9 -1" rotation="-90 0 0" width="3" height="3" color="#111"></a-plane>
+  </a-scene>
+
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg){ const p = document.createElement('div'); p.textContent = msg; logEl.appendChild(p); logEl.scrollTop = logEl.scrollHeight; }
+
+    const playBtn = document.getElementById('playBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const wobbleBtn = document.getElementById('wobbleBtn');
+    const status = document.getElementById('status');
+
+    const eboContainer = document.getElementById('eboContainer');
+    const eboBody = document.getElementById('eboBody');
+
+    playBtn.addEventListener('click', () => {
+      log('Play button clicked — emitting fall');
+      status.textContent = 'Playing';
+      eboContainer.emit('fall');
+      // fallback play
+      setTimeout(()=>{
+        try{ const f = eboContainer.components['animation__fall']; if(f && typeof f.play === 'function'){ f.play(); log('Fallback: played animation__fall'); } }catch(e){ log('fallback error '+e); }
+      }, 50);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      log('Reset clicked — emitting reset');
+      status.textContent = 'Resetting';
+      eboContainer.emit('reset');
+      setTimeout(()=>{
+        try{ const r = eboContainer.components['animation__resetPos']; if(r && typeof r.play === 'function'){ r.play(); log('Fallback: played animation__resetPos'); } }catch(e){ log('fallback error '+e); }
+      }, 50);
+    });
+
+    wobbleBtn.addEventListener('click', () => {
+      if (eboBody && eboBody.components && eboBody.components.animation__wobble) {
+        const comp = eboBody.components.animation__wobble;
+        if (comp.isPlaying) { comp.pause(); wobbleBtn.textContent = 'Start Wobble'; log('Paused wobble'); } else { comp.play(); wobbleBtn.textContent = 'Stop Wobble'; log('Started wobble'); }
+      }
+    });
+
+    // Auto-play a sequence shortly after scene load
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        log('Auto-triggering wobble and fall sequence');
+        if (eboBody && eboBody.components && eboBody.components.animation__wobble) {
+          try { eboBody.components.animation__wobble.play(); log('Wobble play called'); } catch(e){ log('wobble play error '+e); }
+        }
+        // trigger fall
+        eboContainer.emit('fall');
+        setTimeout(()=>{ eboContainer.emit('reset'); }, 3000);
+      }, 700);
+    });
+  </script>
+</body>
+</html>
