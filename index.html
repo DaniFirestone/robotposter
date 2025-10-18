@@ -8,22 +8,8 @@
     <!-- A-Frame MUST load first -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     
-    <!-- Wait for A-Frame to fully load before loading Mind AR -->
-    <script>
-        // Ensure A-Frame is loaded before continuing
-        if (typeof AFRAME === 'undefined') {
-            document.addEventListener('DOMContentLoaded', function() {
-                // Fallback: reload if AFRAME still not defined
-                if (typeof AFRAME === 'undefined') {
-                    console.log('Waiting for A-Frame to load...');
-                    setTimeout(() => location.reload(), 1000);
-                }
-            });
-        }
-    </script>
-    
     <!-- Mind AR - loads after A-Frame -->
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
         * {
@@ -246,6 +232,27 @@
                 opacity: 1;
             }
         }
+
+        /* Debug console */
+        .debug-console {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px;
+            z-index: 1002;
+            display: none;
+        }
+
+        .debug-console.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -277,41 +284,35 @@
     <!-- Error Message -->
     <div class="error-message" id="errorMessage"></div>
 
+    <!-- Debug Console (double-tap to toggle) -->
+    <div class="debug-console" id="debugConsole"></div>
+
     <!-- AR Scene -->
     <a-scene
         id="arScene"
-        mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001; autoStart: true"
+        mindar-image="imageTargetSrc: ./targets.mind; filterMinCF:0.0001; filterBeta: 0.001"
         color-space="sRGB"
         renderer="colorManagement: true, physicallyCorrectLights"
         vr-mode-ui="enabled: false"
         device-orientation-permission-ui="enabled: false"
-        embedded
-        arjs="sourceType: webcam; debugUIEnabled: false;">
+        embedded>
         
-        <a-assets>
-            <!-- We'll use primitives to create EBO -->
-        </a-assets>
+        <a-assets></a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
         <a-entity mindar-image-target="targetIndex: 0">
             <!-- EBO Robot Container -->
-            <!-- Replaced legacy <a-animation> elements with animation__ attributes that use startEvents -->
             <a-entity
                 id="eboContainer"
-                position="0 -0.1 0.1"
-                animation__fall="property: position; from: 0 -0.1 0.1; to: 0.3 -0.5 0.2; dur: 1500; easing: easeInQuad; startEvents: fall; autoplay: false"
-                animation__tumble="property: rotation; from: 0 0 0; to: 180 360 270; dur: 1500; easing: easeOutBounce; startEvents: fall; autoplay: false"
-                animation__resetPos="property: position; to: 0 -0.1 0.1; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false"
-                animation__resetRot="property: rotation; to: 0 0 0; dur: 1000; easing: easeOutElastic; startEvents: reset; autoplay: false">
+                position="0 -0.1 0.1">
                 
                 <!-- EBO's Body (Spherical base) -->
                 <a-sphere 
                     id="eboBody"
                     radius="0.15" 
                     color="#E0E7FF"
-                    position="0 0 0"
-                    animation__wobble="property: rotation; to: 0 0 10; dir: alternate; dur: 800; loop: true; easing: easeInOutSine; autoplay: false">
+                    position="0 0 0">
                     
                     <!-- EBO's Eye (Big black lens) -->
                     <a-sphere 
@@ -326,10 +327,10 @@
                         </a-sphere>
                         <!-- Pupil -->
                         <a-circle
+                            id="eboPupil"
                             radius="0.06"
                             color="#000000"
-                            position="0 0 0.01"
-                            animation__blink="property: scale; to: 1 0.1 1; dur: 150; startEvents: blink">
+                            position="0 0 0.01">
                         </a-circle>
                     </a-sphere>
                     
@@ -349,8 +350,6 @@
                         rotation="0 0 10">
                     </a-cylinder>
                 </a-sphere>
-
-                <!-- (Removed legacy <a-animation> tags and rely on startEvents on the container) -->
             </a-entity>
 
             <!-- Floating particles around the scene -->
@@ -361,14 +360,6 @@
                     color="#FCD34D"
                     position="0.3 0.2 0.1"
                     animation="property: position; to: 0.3 0.4 0.1; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
-                    <a-animation
-                        attribute="opacity"
-                        from="0.3"
-                        to="1"
-                        dur="1000"
-                        direction="alternate"
-                        repeat="indefinite">
-                    </a-animation>
                 </a-sphere>
                 
                 <a-sphere
@@ -405,8 +396,7 @@
                 color="#FF6B35"
                 position="0.4 -0.2 0.05"
                 rotation="0 -45 0"
-                visible="false"
-                animation__appear="property: visible; to: true; dur: 10; startEvents: showFox; autoplay: false">
+                visible="false">
                 <!-- Fox ears -->
                 <a-cone
                     radius-bottom="0.015"
@@ -430,25 +420,33 @@
         let targetFound = false;
         let canFall = true;
         let fallCount = 0;
+        let wobbleInterval = null;
 
-        // Ensure AFRAME is loaded before registering component
-        window.addEventListener('load', function() {
-            if (typeof AFRAME !== 'undefined') {
-                // Custom component for handling taps
-                AFRAME.registerComponent('tap-to-fall', {
-                    init: function () {
-                        this.el.addEventListener('click', function (evt) {
-                            triggerFall();
-                        });
-                    }
-                });
+        // Debug logging
+        const debugLog = [];
+        function debug(msg) {
+            console.log(msg);
+            debugLog.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
+            const debugEl = document.getElementById('debugConsole');
+            if (debugEl) {
+                debugEl.innerHTML = debugLog.slice(-10).join('<br>');
+                debugEl.scrollTop = debugEl.scrollHeight;
             }
+        }
+
+        // Toggle debug console on double-tap
+        let lastTap = 0;
+        document.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTap < 300) {
+                document.getElementById('debugConsole').classList.toggle('show');
+            }
+            lastTap = now;
         });
 
         function startAR() {
-            // Wait for AFRAME to be available
             if (typeof AFRAME === 'undefined') {
-                console.log('Waiting for A-Frame...');
+                debug('Waiting for A-Frame...');
                 setTimeout(startAR, 100);
                 return;
             }
@@ -458,32 +456,30 @@
             const instructions = document.getElementById('instructions');
             const loadingIndicator = document.getElementById('loadingIndicator');
             
-            // Hide start screen
+            debug('Starting AR...');
             startScreen.classList.add('hidden');
-            
-            // Show loading
             loadingIndicator.classList.add('show');
             
-            // Add longer delay to ensure everything is loaded
             setTimeout(() => {
                 arScene.classList.add('active');
-                
-                // Get the scene element
                 const sceneEl = document.querySelector('a-scene');
                 
                 if (!sceneEl) {
                     showError('AR Scene not found. Please refresh the page.');
+                    debug('ERROR: Scene element not found');
                     return;
                 }
                 
-                // Force scene to initialize if not already
+                debug('Scene element found');
+                
                 if (!sceneEl.hasLoaded) {
-                    console.log('Waiting for scene to load...');
+                    debug('Waiting for scene to load...');
                     sceneEl.addEventListener('loaded', () => {
-                        console.log('Scene loaded!');
+                        debug('Scene loaded event fired');
                         initializeAR(sceneEl);
                     });
                 } else {
+                    debug('Scene already loaded');
                     initializeAR(sceneEl);
                 }
             }, 1000);
@@ -493,111 +489,87 @@
             const instructions = document.getElementById('instructions');
             const loadingIndicator = document.getElementById('loadingIndicator');
             
-            // Hide start screen
-            startScreen.classList.add('hidden');
+            debug('Initializing AR...');
             
-            // Show loading
-            loadingIndicator.classList.add('show');
+            sceneEl.addEventListener('arReady', () => {
+                debug('AR Ready!');
+                loadingIndicator.classList.remove('show');
+                instructions.classList.add('show');
+                arStarted = true;
+                
+                sceneEl.addEventListener('click', handleTap);
+            });
             
-            // Initialize AR scene
-            setTimeout(() => {
-                arScene.classList.add('active');
+            sceneEl.addEventListener('arError', (event) => {
+                debug('AR Error: ' + JSON.stringify(event.detail));
+                loadingIndicator.classList.remove('show');
+                showError('Camera permission denied or not supported. Please allow camera access and refresh.');
+            });
+            
+            // Target detection events
+            sceneEl.addEventListener('targetFound', () => {
+                debug('Target Found!');
+                targetFound = true;
+                instructions.textContent = '✨ EBO found! Watch the magic!';
                 
-                // Start AR
-                const sceneEl = document.querySelector('a-scene');
+                // Start wobble animation
+                startWobble();
                 
-                sceneEl.addEventListener('arReady', () => {
-                    loadingIndicator.classList.remove('show');
-                    instructions.classList.add('show');
-                    arStarted = true;
+                // Trigger the fall animation after a short delay
+                setTimeout(() => {
+                    debug('Triggering initial fall animation');
+                    triggerFall();
                     
-                    // Add tap handler to the scene
-                    sceneEl.addEventListener('click', handleTap);
-                });
-                
-                sceneEl.addEventListener('arError', (event) => {
-                    loadingIndicator.classList.remove('show');
-                    showError('Camera permission denied or not supported. Please allow camera access and refresh.');
-                });
-                
-                // Target detection events
-                sceneEl.addEventListener('targetFound', () => {
-                    console.log('targetFound fired');
-                    targetFound = true;
-                    instructions.textContent = '✨ EBO found! Watch the magic!';
-                    
-                    // Trigger the fall animation after a short delay
                     setTimeout(() => {
-                        triggerFall();
-                        
-                        // Show tap hint after first animation
-                        setTimeout(() => {
-                            document.getElementById('tapHint').classList.add('show');
-                        }, 2000);
-                    }, 1000);
-                    
-                    // Start wobble animation (safely)
-                    const eboBody = document.getElementById('eboBody');
-                    if (eboBody && eboBody.components && eboBody.components.animation__wobble && typeof eboBody.components.animation__wobble.play === 'function') {
-                        eboBody.components.animation__wobble.play();
-                    } else {
-                        console.warn('wobble component not ready yet');
-                    }
-                    
-                    // Add haptic feedback if available
-                    if ('vibrate' in navigator) {
-                        navigator.vibrate([100, 50, 100]);
-                    }
-                });
+                        document.getElementById('tapHint').classList.add('show');
+                    }, 2000);
+                }, 1000);
                 
-                sceneEl.addEventListener('targetLost', () => {
-                    targetFound = false;
-                    instructions.textContent = '📱 Find EBO on the poster!';
-                    document.getElementById('tapHint').classList.remove('show');
-                    
-                    // Reset EBO position
-                    resetEbo();
-                });
-            }, 500);
+                // Haptic feedback
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([100, 50, 100]);
+                }
+            });
+            
+            sceneEl.addEventListener('targetLost', () => {
+                debug('Target Lost');
+                targetFound = false;
+                instructions.textContent = '📱 Find EBO on the poster!';
+                document.getElementById('tapHint').classList.remove('show');
+                
+                // Stop wobble
+                stopWobble();
+                
+                // Reset EBO position
+                resetEbo();
+            });
         }
 
+        // Animation using direct attribute manipulation for reliability
         function triggerFall() {
-            if (!canFall || !targetFound) return;
-            
-            canFall = false;
-            fallCount++;
-            
-            const eboContainer = document.getElementById('eboContainer');
-            if (!eboContainer) {
-                console.error('eboContainer not found');
+            if (!canFall || !targetFound) {
+                debug('Cannot fall: canFall=' + canFall + ', targetFound=' + targetFound);
                 return;
             }
             
-            console.log('triggerFall called, emitting fall');
-            // Emit fall event (preferred)
-            eboContainer.emit('fall');
-
-            // Fallback: if animation components exist, try to play them directly (some browsers / webviews ignore begin/startEvents)
-            try {
-                const fallComp = eboContainer.components && eboContainer.components['animation__fall'];
-                const tumbleComp = eboContainer.components && eboContainer.components['animation__tumble'];
-                if (fallComp && typeof fallComp.play === 'function') {
-                    fallComp.play();
-                }
-                if (tumbleComp && typeof tumbleComp.play === 'function') {
-                    tumbleComp.play();
-                }
-            } catch (err) {
-                console.warn('fallback play for fall/tumble failed', err);
+            canFall = false;
+            fallCount++;
+            debug('Fall triggered, count: ' + fallCount);
+            
+            const eboContainer = document.getElementById('eboContainer');
+            if (!eboContainer) {
+                debug('ERROR: eboContainer not found');
+                return;
             }
             
-            // Blink animation (safely)
-            const eyeCircle = document.querySelector('#eboBody a-circle');
-            if (eyeCircle) {
-                eyeCircle.emit('blink');
-            } else {
-                console.warn('eye circle not found for blink');
-            }
+            // Stop wobble during fall
+            stopWobble();
+            
+            // Animate using setAttribute for maximum compatibility
+            animateFall(eboContainer);
+            
+            // Blink animation
+            blinkEye();
             
             // Haptic feedback
             if ('vibrate' in navigator) {
@@ -607,8 +579,11 @@
             // Show fox after 3 falls
             if (fallCount === 3) {
                 const fox = document.getElementById('fox');
-                if (fox) fox.emit('showFox');
-                instructions.textContent = '🦊 Fox appeared to help!';
+                if (fox) {
+                    fox.setAttribute('visible', true);
+                    instructions.textContent = '🦊 Fox appeared to help!';
+                    debug('Fox revealed!');
+                }
             }
             
             // Reset after animation completes
@@ -617,28 +592,160 @@
             }, 2500);
         }
 
+        function animateFall(container) {
+            const startPos = '0 -0.1 0.1';
+            const endPos = '0.3 -0.5 0.2';
+            const startRot = '0 0 0';
+            const endRot = '180 360 270';
+            const duration = 1500;
+            const startTime = Date.now();
+            
+            debug('Starting fall animation');
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Easing function (easeInQuad)
+                const eased = progress * progress;
+                
+                // Interpolate position
+                const start = startPos.split(' ').map(Number);
+                const end = endPos.split(' ').map(Number);
+                const currentPos = start.map((s, i) => s + (end[i] - s) * eased);
+                
+                // Interpolate rotation (easeOutBounce approximation)
+                const rotStart = startRot.split(' ').map(Number);
+                const rotEnd = endRot.split(' ').map(Number);
+                const bounceEased = easeOutBounce(progress);
+                const currentRot = rotStart.map((s, i) => s + (rotEnd[i] - s) * bounceEased);
+                
+                container.setAttribute('position', currentPos.join(' '));
+                container.setAttribute('rotation', currentRot.join(' '));
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    debug('Fall animation complete');
+                }
+            }
+            
+            animate();
+        }
+
         function resetEbo() {
             const eboContainer = document.getElementById('eboContainer');
             if (!eboContainer) return;
-            eboContainer.emit('reset');
-
-            // Fallback: directly play reset animations if needed
-            try {
-                const resetPos = eboContainer.components && eboContainer.components['animation__resetPos'];
-                const resetRot = eboContainer.components && eboContainer.components['animation__resetRot'];
-                if (resetPos && typeof resetPos.play === 'function') resetPos.play();
-                if (resetRot && typeof resetRot.play === 'function') resetRot.play();
-            } catch (err) {
-                console.warn('fallback reset play failed', err);
+            
+            debug('Resetting EBO position');
+            
+            const duration = 1000;
+            const startTime = Date.now();
+            const currentPos = eboContainer.getAttribute('position');
+            const currentRot = eboContainer.getAttribute('rotation');
+            const targetPos = '0 -0.1 0.1';
+            const targetRot = '0 0 0';
+            
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = easeOutElastic(progress);
+                
+                const start = Object.values(currentPos).map(Number);
+                const end = targetPos.split(' ').map(Number);
+                const pos = start.map((s, i) => s + (end[i] - s) * eased);
+                
+                const rotStart = Object.values(currentRot).map(Number);
+                const rotEnd = targetRot.split(' ').map(Number);
+                const rot = rotStart.map((s, i) => s + (rotEnd[i] - s) * eased);
+                
+                eboContainer.setAttribute('position', pos.join(' '));
+                eboContainer.setAttribute('rotation', rot.join(' '));
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    debug('Reset complete');
+                    canFall = true;
+                    // Restart wobble
+                    if (targetFound) {
+                        startWobble();
+                    }
+                }
             }
             
+            animate();
+        }
+
+        function startWobble() {
+            if (wobbleInterval) return;
+            
+            debug('Starting wobble');
+            const eboBody = document.getElementById('eboBody');
+            if (!eboBody) return;
+            
+            let wobbleDir = 1;
+            let wobbleAngle = 0;
+            
+            wobbleInterval = setInterval(() => {
+                wobbleAngle += wobbleDir * 0.5;
+                if (Math.abs(wobbleAngle) >= 10) {
+                    wobbleDir *= -1;
+                }
+                const currentRot = eboBody.getAttribute('rotation');
+                eboBody.setAttribute('rotation', `${currentRot.x} ${currentRot.y} ${wobbleAngle}`);
+            }, 50);
+        }
+
+        function stopWobble() {
+            if (wobbleInterval) {
+                debug('Stopping wobble');
+                clearInterval(wobbleInterval);
+                wobbleInterval = null;
+                
+                const eboBody = document.getElementById('eboBody');
+                if (eboBody) {
+                    const rot = eboBody.getAttribute('rotation');
+                    eboBody.setAttribute('rotation', `${rot.x} ${rot.y} 0`);
+                }
+            }
+        }
+
+        function blinkEye() {
+            const pupil = document.getElementById('eboPupil');
+            if (!pupil) return;
+            
+            const originalScale = pupil.getAttribute('scale') || {x: 1, y: 1, z: 1};
+            pupil.setAttribute('scale', '1 0.1 1');
+            
             setTimeout(() => {
-                canFall = true;
-            }, 1000);
+                pupil.setAttribute('scale', `${originalScale.x} ${originalScale.y} ${originalScale.z}`);
+            }, 150);
+        }
+
+        // Easing functions
+        function easeOutBounce(t) {
+            const n1 = 7.5625;
+            const d1 = 2.75;
+            if (t < 1 / d1) {
+                return n1 * t * t;
+            } else if (t < 2 / d1) {
+                return n1 * (t -= 1.5 / d1) * t + 0.75;
+            } else if (t < 2.5 / d1) {
+                return n1 * (t -= 2.25 / d1) * t + 0.9375;
+            } else {
+                return n1 * (t -= 2.625 / d1) * t + 0.984375;
+            }
+        }
+
+        function easeOutElastic(t) {
+            const c4 = (2 * Math.PI) / 3;
+            return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
         }
 
         function handleTap(event) {
             if (targetFound) {
+                debug('Tap detected');
                 triggerFall();
             }
         }
@@ -656,17 +763,9 @@
         // Random blinks
         setInterval(() => {
             if (targetFound && Math.random() > 0.7) {
-                const eyeCircle = document.querySelector('#eboBody a-circle');
-                if (eyeCircle) eyeCircle.emit('blink');
+                blinkEye();
             }
         }, 3000);
-
-        // Handle orientation changes
-        window.addEventListener('resize', () => {
-            if (arStarted) {
-                location.reload();
-            }
-        });
 
         // Prevent scroll on mobile
         document.addEventListener('touchmove', (e) => {
